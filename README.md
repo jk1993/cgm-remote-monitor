@@ -294,6 +294,7 @@ To learn more about the Nightscout API, visit https://YOUR-SITE.com/api-docs/ or
     * The `linear` option has equidistant tick marks; the range used is dynamic so that space at the top of chart isn't wasted.
     * The `log-dynamic` is similar to the default `log` options, but uses the same dynamic range and the `linear` scale.
   * `EDIT_MODE` (`on`) - possible values `on` or `off`. Enables the icon allowing for editing of treatments in the main view.
+  * `BOLUS_RENDER_OVER` (1) - U value over which the bolus values are rendered on the chart if the 'x U and Over' option is selected. This value can be an integer or a float, e.g. 0.3, 1.5, 2, etc...
 
 ### Predefined values for your server settings (optional)
   * `INSECURE_USE_HTTP` (`false`) - Redirect unsafe http traffic to https. Possible values `false`, or `true`. Your site redirects to `https` by default. If you don't want that from Nightscout, but want to implement that with a Nginx or Apache proxy, set `INSECURE_USE_HTTP` to `true`. Note: This will allow (unsafe) http traffic to your Nightscout instance and is not recommended.
@@ -305,10 +306,28 @@ To learn more about the Nightscout API, visit https://YOUR-SITE.com/api-docs/ or
 
 ### Views
 
-  There are a few alternate web views available from the main menu that display a simplified BG stream. (If you launch one of these in a fullscreen view in iOS, you can use a left-to-right swipe gesture to exit the view.)
+  Nightscout allows to create custom, simplified views using a predefined set of elements. This option is available under `[+]` link in the main menu.
+  
+  List of available items:
+  * `SGV` - Sensor Glucose Value
+  * `SGV age` - time since the last SGV read
+  * `SGV delta` - change of SGV in the last 5 minutes
+  * `Trend arrow` - icon of the SG trend
+  * `Time` - current time
+  * `Line break` - invisible item that will move following items to the next line (by default all are showing on the same level)
+  
+  All visible items have `Size` property which allows to customize the view even more. Also, all items may appear multiple times on the view.
+  
+  Apart from adding items, it is possible to customize other aspects of the views, like selecting `Color` or `Black` background. The first one will indicate current BG threshold (green = in range; blue = below range; yellow = above range; red = urgent below/above).
+  `Show SGV age` option will make `SGV age` item appear `Always` or only if the predefined threshold is reached: `Only after threshold`. Breaching `SGV age threshold` will also make `Color` background turn grey and strike through `SGV`.
+  `Clock view configurator` will generate an URL (available under `Open my clock view!` link) that could be bookmarked.
+  
+  There are a few default views available from the main menu: 
   * `Clock` - Shows current BG, trend arrow, and time of day. Grey text on a black background.
-  * `Color` - Shows current BG and trend arrow. White text on a background that changes color to indicate current BG threshold (green = in range; blue = below range; yellow = above range; red = urgent below/above). Set `SHOW_CLOCK_DELTA` to `true` to show BG change in the last 5 minutes, set `SHOW_CLOCK_LAST_TIME` to `true` to always show BG age.
+  * `Color` - Shows current BG and trend arrow. White text on a color background.
   * `Simple` - Shows current BG. Grey text on a black background.
+
+  If you launch one of these views in a fullscreen view in iOS, you can use a left-to-right swipe gesture to exit the view.
 
 ### Split View
 
@@ -534,12 +553,14 @@ For remote overrides, the following extended settings must be configured:
 ##### `dbsize` (Database Size)
   Show size of Nightscout Database, as a percentage of declared available space or in MiB.
 
-  Many deployments of Nightscout use free tier of MongoDB on Heroku, which is limited in size. After some time, as volume of stored data grows, it may happen that this limit is reached and system is unable to store new data. This plugin provides pill that indicates size of Database and shows (when configured) alarms regarding reaching space limit.
+  Many deployments of Nightscout use free tier of MongoDB Atlas on Heroku, which is limited in size. After some time, as volume of stored data grows, it may happen that this limit is reached and system is unable to store new data. This plugin provides pill that indicates size of Database and shows (when configured) alarms regarding reaching space limit.
 
   **IMPORTANT:** This plugin can only check how much space database already takes, _but cannot infer_ max size available on server for it. To have correct alarms and realistic percentage, `DBSIZE_MAX` need to be properly set - according to your mongoDB hosting configuration.
 
-  **NOTE:** It may happen that new data cannot be saved to database (due to size limits) even when this plugin reports that storage is not 100% full. MongoDB pre-allocate data in advance, and database file is always made bigger than total real data size. To avoid premature alarms, this plugin refers to data size instead of file size, but sets warning thresholds low. It may happen, that file size of database will take 100% of allowed space but there will be plenty of place inside to store the data. But it may also happen, with file size is at its max, that data size will be ~70% of file size, and there will be no place left. That may happen because data inside file is fragmented and free space _holes_ are too small for new entries. In such case calling `db.repairDatabase()` on mongoDB is recommended to compact and repack data (currently only doable with third-party mongoDB tools, but action is planned to be added in _Admin Tools_ section in future releases).
+  **NOTE:** This plugin rely on db.stats() for reporting _logical_ size of database, which may be different than _physical_ size of database on server. It may work for free tier of MongoDB on Atlas, since it calculate quota according to logical size too, but may fail for other hostings or self-hosted database with quota based on physical size. 
   
+  **NOTE:** MongoDB Atlas quota is for **all** databases in cluster, while each instance will get only size of **its own database only**. It is ok when you only have **one** database in cluster (most common scenario) but will not work for multiple parallel databases. In such case, spliting known quota equally beetween databases and setting `DBSIZE_MAX` to that fraction may help, but wont be precise.
+
   All sizes are expressed as integers, in _Mebibytes_ `1 MiB == 1024 KiB == 1024*1024 B`
 
   * `DBSIZE_MAX` (`496`) - Maximal allowed size of database on your mongoDB server, in MiB. You need to adjust that value to match your database hosting limits - default value is for standard Heroku mongoDB free tier.
@@ -556,6 +577,7 @@ For remote overrides, the following extended settings must be configured:
   Plugins only have access to their own extended settings, all the extended settings of client plugins will be sent to the browser.
 
   * `DEVICESTATUS_ADVANCED` (`true`) - Defaults to true. Users who only have a single device uploading data to Nightscout can set this to false to reduce the data use of the site.
+  * `DEVICESTATUS_DAYS` (`1`) - Defaults to 1, can optionally be set to 2. Users can use this to show 48 hours of device status data for in retro mode, rather than the default 24 hours. Setting this value to 2 will roughly double the bandwidth usage of nightscout, so users with a data cap may not want to update this setting.
 
 #### Pushover
   In addition to the normal web based alarms, there is also support for [Pushover](https://pushover.net/) based alarms and notifications.
